@@ -24,7 +24,7 @@ class px4_quad:
 
         # Length of motor to CoG segment
         self.length = 0.47 / 2  # m
-        self.max_thrust = 10
+        self.max_thrust = 15
         self.g = np.array([[0], [0], [9.81]])  # m s^-2
         h = np.cos(np.pi / 4) * self.length
         self.x_f = np.array([h, -h, -h, h])
@@ -295,7 +295,7 @@ class GPR:
          # hyper parameters optimization
         def negative_log_likelihood_loss(params):
             self.params["l"]= params
-            Kyy = self.kernel(self.train_X, self.train_X) #+ 1e-8 * np.eye(len(self.train_X))
+            Kyy = self.kernel(self.train_X, self.train_X) + 5e-4 * np.eye(len(self.train_X))
             loss = 0.5 * self.train_y.T.dot(np.linalg.inv(Kyy)).dot(self.train_y) + 0.5 * np.linalg.slogdet(Kyy)[1] + 0.5 * len(self.train_X) * np.log(2 * np.pi)
             return np.sum(loss.ravel())
 
@@ -325,15 +325,15 @@ def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
     x2 = (control[:,0:-1])
     input_state = np.concatenate(( x1 , x2 ), axis=0)
     error_y = (measurement[:,1:] - predict[:,1:])
-    # use 100 points in GP 
-    down_sample_factor = int(total_buff_size / 50 )
+    # use 30 points in GP 
+    down_sample_factor = int(total_buff_size / 30 )
     input_state = input_state[:,::down_sample_factor]
     error_y = error_y[:,::down_sample_factor]
 
     #apply PCA
     ALL_state = cs.vertcat(x,u)
     # defined used dims
-    dim = 8 
+    dim = 12
     pca = PCA(n_components=dim)
     pca.fit(input_state.T)
     W = pca.components_
@@ -342,22 +342,22 @@ def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
     # find optimal L 
     gpr1 = GPR()
     gpr1c = GPR()
-    gpr1.fit(inputstate_hand.T,error_y[[6],:].T , [(0.1, 2)] )
+    gpr1.fit(inputstate_hand.T,error_y[[6],:].T , [(0.1, 10)] )
     gpr1c.fit(inputstate_hand.T,error_y[[6],:].T , [(0.1, 10)] )
 
     gpr2 = GPR()
     gpr2c = GPR()
-    gpr2.fit(inputstate_hand.T,error_y[[7],:].T , [(0.1, 2)] )
+    gpr2.fit(inputstate_hand.T,error_y[[7],:].T , [(0.1, 10)] )
     gpr2c.fit(inputstate_hand.T,error_y[[7],:].T , [(0.1, 10)] )
 
     gpr3 = GPR()
     gpr3c = GPR()
-    gpr3.fit(inputstate_hand.T,error_y[[2,8],:].T ,[(0.1, 2)] )
-    gpr3c.fit(inputstate_hand.T,error_y[[8],:].T ,[(0.1, 10)] )
+    gpr3.fit(inputstate_hand.T,error_y[[2,8],:].T ,[(0.1, 10)] )
+    gpr3c.fit(inputstate_hand.T,error_y[[2,8],:].T ,[(0.1, 10)] )
 
     gpr4 = GPR()
     gpr4c = GPR()
-    gpr4.fit(inputstate_hand.T,error_y[[2],:].T ,[(0.1, 2)] )
+    gpr4.fit(inputstate_hand.T,error_y[[2],:].T ,[(0.1, 10)] )
     gpr4c.fit(inputstate_hand.T,error_y[[2],:].T ,[(0.1, 10)] )
 
     reduced_inputfeatures = cs.mtimes(W,ALL_state)
@@ -386,15 +386,15 @@ def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
     error_1 = cs.vertcat(cs.MX([0,0,0,0,0,0]),error_1,cs.MX([0,0]),cs.MX([0,0,0]))
     error_2 = cs.vertcat(cs.MX([0,0,0,0,0,0,0]),error_2,cs.MX([0]),cs.MX([0,0,0]))
     error_3 = cs.vertcat(cs.MX([0,0]),error_3[0],cs.MX([0,0,0,0,0]),error_3[1],cs.MX([0,0,0]))
-    #error_4 = cs.vertcat(cs.MX([0,0]),error_4,cs.MX([0,0,0,0,0,0]),cs.MX([0,0,0]))
+
 
     print('=======================================================================')
-    print('============================fit result PCA =============================')
+    print(f'============================fit result PCA :{dim}=============================')
     print('=======================================================================')
     print(f'l_1:',l_1,'sig_f_1:',sig_f_1 ,'     correct L', gpr1c.params['l'])
     print(f'l_2:',l_2,'sig_f_2:',sig_f_2 ,'     correct L', gpr2c.params['l'])
     print(f'l_3:',l_3,'sig_f_3:',sig_f_3 ,'     correct L', gpr3c.params['l'])
-    print(f'l_4:',l_4,'sig_f_4:',sig_f_4 ,'     correct L', gpr4c.params['l'])
+
     print('input_state.shape',input_state.shape)
     
     print('down_sample_factor',down_sample_factor)
@@ -409,13 +409,13 @@ def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
 
 def fit_gp_pca(sig_f,l,X,Y,S):
     K = kernel(X,X,sig_f,l)
-
+    alpha = 5e-4
     x1 = S.T
     x2 = X.T
     print(" test shape of S and X ",'X shape',X.shape,'S shape',S.shape)
     dist_matrix = cs.sum2(x1**2) + cs.sum2(x2**2) - ((cs.mtimes(x1, x2.T))*2).T
     Kstar = (sig_f ** 2 * np.exp(-0.5 / l ** 2 * dist_matrix)).T
-    error = cs.mtimes ( cs.mtimes(Kstar,np.linalg.inv(K) ), Y.T ).T
+    error = cs.mtimes ( cs.mtimes(Kstar,np.linalg.inv(K + alpha * np.eye(X.shape[1])) ), Y.T ).T
     return error
 
 def fit_gp(sig_f,l,X,Y,x,u):

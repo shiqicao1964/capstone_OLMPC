@@ -14,6 +14,21 @@ from casadi.casadi import *
 import time
 from tqdm import trange
 from scipy.optimize import minimize
+import numpy as np
+from skopt import gp_minimize
+from sklearn.model_selection import cross_val_score
+from skopt.space import Real
+import warnings
+warnings.filterwarnings('ignore')
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+from skopt import gp_minimize
+from skopt.space import Real
+from skopt.utils import use_named_args
+from sklearn.metrics import mean_squared_error
+
+
+
 class px4_quad:
     def __init__(self):
         # Quadrotor intrinsic parameters
@@ -22,7 +37,7 @@ class px4_quad:
 
         # Length of motor to CoG segment
         self.length = 0.47 / 2  # m
-        self.max_thrust = 10
+        self.max_thrust = 15
         self.g = np.array([[0], [0], [9.81]])  # m s^-2
         h = np.cos(np.pi / 4) * self.length
         self.x_f = np.array([h, -h, -h, h])
@@ -261,7 +276,6 @@ def y_hat(X,y,query_slot_index,sigf,l) :
     y_hat = np.dot ( np.dot(  Ks ,Kxxinv ), train_sety.T ).T
     return y_hat
 
-
 def error_square(X,y,query_slot_index,sigf,l):
     Validation_y = y[:,query_slot_index]
     error_square = sum (sum ((y_hat(X,y,query_slot_index,sigf,l) - Validation_y)**2))
@@ -275,6 +289,8 @@ def RMS (X,y,sigf,l,slot_number):
         i_RMS = error_square(X,y,query_slot_index,sigf,l)
         totalRMS += i_RMS
     return totalRMS
+
+
 class GPR:
     def __init__(self, optimize=True):
         self.is_fit = False
@@ -285,7 +301,7 @@ class GPR:
         dist_matrix = np.sum(x1**2, 1).reshape(-1, 1) + np.sum(x2**2, 1) - 2 * np.dot(x1, x2.T)
         return self.params["sigma_f"] ** 2 * np.exp(-0.5 / self.params["l"] ** 2 * dist_matrix)
     
-    def fit(self, X, y,bounds_):
+    def fit(self, X, y,bounds_,alpha):
         # store train data
         self.train_X = np.asarray(X)
         self.train_y = np.asarray(y)
@@ -293,7 +309,7 @@ class GPR:
          # hyper parameters optimization
         def negative_log_likelihood_loss(params):
             self.params["l"]= params
-            Kyy = self.kernel(self.train_X, self.train_X) #+ 1e-8 * np.eye(len(self.train_X))
+            Kyy = self.kernel(self.train_X, self.train_X) + alpha * np.eye(len(self.train_X))
             loss = 0.5 * self.train_y.T.dot(np.linalg.inv(Kyy)).dot(self.train_y) + 0.5 * np.linalg.slogdet(Kyy)[1] + 0.5 * len(self.train_X) * np.log(2 * np.pi)
             return np.sum(loss.ravel())
 
@@ -303,6 +319,8 @@ class GPR:
                    method='L-BFGS-B')
             self.params["l"] = res.x[0]
         self.is_fit = True
+
+
 def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
     model = linear_quad_model()
     x = model.x
@@ -323,69 +341,82 @@ def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
     x2 = (control[:,0:-1])
     input_state = np.concatenate(( x1 , x2 ), axis=0)
     error_y = (measurement[:,1:] - predict[:,1:])
+
+    # take 60 points for optimal regarlization
+    down_sample_factor_R = int(total_buff_size / 60 )
+    input_state_R = input_state[:,::down_sample_factor_R]
+    error_y_R = error_y[:,::down_sample_factor_R]
+
     # use 100 points in GP 
-    down_sample_factor = int(total_buff_size / 50 )
+    down_sample_factor = int(total_buff_size / 30 )
+
+    #a test set for Bayesian Optimization
+    input_state_test = input_state[:,3::down_sample_factor_R]
+    error_y_test = error_y[:,3::down_sample_factor_R]
+
     input_state = input_state[:,::down_sample_factor]
     error_y = error_y[:,::down_sample_factor]
+ 
+    # Bayesian Optimization optimal reguarlization
+    #optimal_alpha_1 = Bayesian_Optimization(input_state.T,error_y.T,input_state_test.T,error_y_test.T)
+
+    # find optimal reguarlization\cross validation 
+    optimal_alpha_1 = find_optimal_alpha(input_state_R.T,error_y_R[[2,6,7,8],:].T)
+
+    optimal_alpha_1 = 0
 
     # find optimal L 
     gpr1 = GPR()
-    gpr1c = GPR()
-    gpr1.fit(input_state.T,error_y[[6],:].T , [(0.1, 2)] )
-    gpr1c.fit(input_state.T,error_y[[6],:].T , [(0.1, 10)] )
+    gpr1.fit(input_state.T,error_y[[6],:].T , [(0.1, 10)] ,optimal_alpha_1)
+
 
     gpr2 = GPR()
-    gpr2c = GPR()
-    gpr2.fit(input_state.T,error_y[[7],:].T , [(0.1, 2)] )
-    gpr2c.fit(input_state.T,error_y[[7],:].T , [(0.1, 10)] )
+    gpr2.fit(input_state.T,error_y[[7],:].T , [(0.1, 10)] ,optimal_alpha_1)
+
 
     gpr3 = GPR()
-    gpr3c = GPR()
-    gpr3.fit(input_state.T,error_y[[2,8],:].T ,[(0.1, 2)] )
-    gpr3c.fit(input_state.T,error_y[[8],:].T ,[(0.1, 10)] )
+    gpr3.fit(input_state.T,error_y[[2,8],:].T ,[(0.1, 10)] ,optimal_alpha_1)
 
-    gpr4 = GPR()
-    gpr4c = GPR()
-    gpr4.fit(input_state.T,error_y[[2],:].T ,[(0.1, 2)] )
-    gpr4c.fit(input_state.T,error_y[[2],:].T ,[(0.1, 10)] )
+
+
+
+
 
     # use optimal L train GP error model
     l_1 = gpr1.params['l']
     sig_f_1 = gpr1.params['sigma_f']
     X = input_state
     Y = error_y[[6],:]
-    error_1 = fit_gp(sig_f_1,l_1,X,Y,x,u)
+    error_1 = fit_gp(sig_f_1,l_1,X,Y,x,u,optimal_alpha_1)
 
     l_2 = gpr2.params['l']
     sig_f_2 = gpr2.params['sigma_f']
     X = input_state
     Y = error_y[[7],:]
-    error_2 = fit_gp(sig_f_2,l_2,X,Y,x,u)
+    error_2 = fit_gp(sig_f_2,l_2,X,Y,x,u,optimal_alpha_1)
 
     l_3 = gpr3.params['l']
     sig_f_3 = gpr3.params['sigma_f']
     X = input_state
     Y = error_y[[2,8],:]
-    error_3 = fit_gp(sig_f_3,l_3,X,Y,x,u)
+    error_3 = fit_gp(sig_f_3,l_3,X,Y,x,u,optimal_alpha_1)
 
-    l_4 = gpr4.params['l']
-    sig_f_4 = gpr4.params['sigma_f']
-    X = input_state
-    Y = error_y[[2],:]
-    error_4 = fit_gp(sig_f_4,l_4,X,Y,x,u)
+
+
+
 
     error_1 = cs.vertcat(cs.MX([0,0,0,0,0,0]),error_1,cs.MX([0,0]),cs.MX([0,0,0]))
     error_2 = cs.vertcat(cs.MX([0,0,0,0,0,0,0]),error_2,cs.MX([0]),cs.MX([0,0,0]))
     error_3 = cs.vertcat(cs.MX([0,0]),error_3[0],cs.MX([0,0,0,0,0]),error_3[1],cs.MX([0,0,0]))
-    #error_4 = cs.vertcat(cs.MX([0,0]),error_4,cs.MX([0,0,0,0,0,0]),cs.MX([0,0,0]))
+
 
     print('=======================================================================')
     print('============================fit result ================================')
     print('=======================================================================')
-    print(f'l_1:',l_1,'sig_f_1:',sig_f_1 ,'     correct L', gpr1c.params['l'])
-    print(f'l_2:',l_2,'sig_f_2:',sig_f_2 ,'     correct L', gpr2c.params['l'])
-    print(f'l_3:',l_3,'sig_f_3:',sig_f_3 ,'     correct L', gpr3c.params['l'])
-    print(f'l_4:',l_4,'sig_f_4:',sig_f_4 ,'     correct L', gpr4c.params['l'])
+    print(f'l_1:',l_1,'sig_f_1:',sig_f_1 )
+    print(f'l_2:',l_2,'sig_f_2:',sig_f_2 )
+    print(f'l_3:',l_3,'sig_f_3:',sig_f_3 )
+    print('optimal_alpha_1:',optimal_alpha_1)
     print('input_state.shape',input_state.shape)
     
     print('down_sample_factor',down_sample_factor)
@@ -398,20 +429,60 @@ def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
     model.disc_dyn_expr = xf + error_1 + error_2 + error_3
     return model
 
-def fit_gp(sig_f,l,X,Y,x,u):
+def Bayesian_Optimization(X_train,y_train,X_test,y_test):
+
+    t0 = time.time()
+    kernel = C(1.0, (1e-4, 1e2)) * RBF(1.0, (1e-4, 10))
+    search_space = [Real(1e-9, 1e-1, name='alpha')]
+    @use_named_args(search_space)
+    def objective(alpha):
+        model = GaussianProcessRegressor(kernel=kernel, alpha=alpha)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        rmse = sqrt(mean_squared_error(y_test, y_pred))
+        return rmse
+    
+    x0 = [1e-7]
+    res = gp_minimize(objective, search_space, x0=x0, n_calls=20, random_state=0)
+
+    best_alpha = res.x[0]
+    print("Best alpha:", best_alpha,'time used',time.time()-t0)
+    return best_alpha
+
+def find_optimal_alpha(X,y):
+    search_list_alpha = np.array([1,5e-1,2e-1,8e-2,4e-2,1e-2,5e-3,1e-3,5e-4,1e-4,5e-5,1e-5,5e-6,1e-6])
+    recode_score=np.array([])
+    alpha_lst = np.array([])
+    t0 = time.time()
+    print('X',X.shape,'y',y.shape)
+    for i in range(len(search_list_alpha)):
+        alpha = search_list_alpha[i]
+        kernel = C(0.2, (1e-3, 1e2)) * RBF(1.0, (1e-2, 1e1))
+        gp = GaussianProcessRegressor(kernel=kernel, alpha=alpha)
+        cv_scores = cross_val_score(gp, X, y, cv=3, scoring='neg_mean_squared_error')
+        recode_score = np.append(recode_score,np.mean(cv_scores))
+        alpha_lst = np.append(alpha_lst,alpha)
+    
+    optimal_alpha = alpha_lst[recode_score == np.max(recode_score)]
+    print('optimal_alpha',optimal_alpha,'time used',time.time()-t0)
+    return optimal_alpha
+
+
+def fit_gp(sig_f,l,X,Y,x,u,alpha):
+    
     K = kernel(X,X,sig_f,l)
     x1 = cs.vertcat(x,u).T
     x2 = X.T
     dist_matrix = cs.sum2(x1**2) + cs.sum2(x2**2) - ((cs.mtimes(x1, x2.T))*2).T
     Kstar = (sig_f ** 2 * np.exp(-0.5 / l ** 2 * dist_matrix)).T
-    error = cs.mtimes ( cs.mtimes(Kstar,np.linalg.inv(K) ), Y.T ).T
+    error = cs.mtimes ( cs.mtimes(Kstar,np.linalg.inv(K + alpha * np.eye(X.shape[1])) ), Y.T ).T
     return error
     
 def acados_settinngs(acados_models,solver_options = None,t_horizon = 1,N = 20,build=True, generate=True):
     
     my_quad = px4_quad()
     
-    q_cost = np.array([20, 20, 22, 2, 2, 2, 0.5, 0.5, 0.5, 1, 1, 1])
+    q_cost = np.array([20, 20, 22, 2, 2, 2, 1, 1, 1, 1, 1, 1])
     r_cost = np.array([0.1, 0.1, 0.1, 0.1])
      
     nx = acados_models.x.size()[0]

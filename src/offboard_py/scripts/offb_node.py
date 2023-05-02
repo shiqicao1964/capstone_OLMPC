@@ -104,7 +104,7 @@ discretization_dt = 0.05
 v_average = 2 # 1.5 / 2 / 2.5 / 3
 radius = 8
 # set traj =================================================================================================================================
-x_ref,y_ref,z_ref,t_ref,vx_ref,vy_ref,vz_ref,T_onecircle = ellipse_trag(speed = v_average,x_w = 4,y_w = 4,z_w = 0,H = 5,dT = discretization_dt ,sim_t = 270)
+x_ref,y_ref,z_ref,t_ref,vx_ref,vy_ref,vz_ref,T_onecircle = ellipse_trag(speed = v_average,x_w = 4,y_w = 4,z_w = 0,H = 5,dT = discretization_dt ,sim_t = 150)
 ref = np.zeros((x_ref.shape[0],12))
 ref[::,0] = x_ref
 ref[::,1] = y_ref
@@ -130,8 +130,8 @@ predict = np.genfromtxt(source_dir+'/GP_points/predict_mismatch_16.out', delimit
 measurement = np.genfromtxt(source_dir+'/GP_points/measurement_mismatch_16.out', delimiter=",")
 controls = np.genfromtxt(source_dir+'/GP_points/controls_mismatch_16.out', delimiter=",")
 
-model_init = DT_gp_model(t_horizon/N,f'GP_{0}',predict,measurement,controls,buff_Length)
-#model_init = DT_linear_model(dT = t_horizon/N,name = f'DT_{0}')
+#model_init = DT_gp_model(t_horizon/N,f'GP_{0}',predict,measurement,controls,buff_Length)
+model_init = DT_linear_model(dT = t_horizon/N,name = f'DT_{0}')
 
 acados_solver = acados_settinngs(model_init,t_horizon = t_horizon,N=N)
 
@@ -164,7 +164,7 @@ def build_new_model():
         if len(GP_buff_predict) < buff_Length :
             time.sleep(0.05)
             acados_solver = acados_settinngs(model_save[0],t_horizon = t_horizon,N=N)
-        elif (time.time() - t_comp_start < 100):
+        elif (time.time() - t_comp_start < 10):
             acados_solver = acados_settinngs(model_save[0],t_horizon = t_horizon,N=N)
 
         else:
@@ -314,7 +314,7 @@ def main_control():
         # measure states
         roll,pitch,yaw = euler_from_quaternion(pos_1.pose.orientation.x,
             pos_1.pose.orientation.y,pos_1.pose.orientation.z,pos_1.pose.orientation.w)
-        import random
+
         Xc = pos_1.pose.position.x #+ random.randint(0,9) /100
         Yc = pos_1.pose.position.y
         Zc = pos_1.pose.position.z
@@ -362,6 +362,10 @@ def main_control():
                 current_states = np.array(
                 [Xc, Yc, Zc] + [roll, pitch, yaw] + [Vx_mean, Vy_mean, Vz_mean] + [Wxc, Wyc, Wzc]
                 )
+
+                # add noise 
+                noise = np.random.normal(0, 0.015, current_states.shape)
+                current_states = current_states + noise
 
                 # solve MPC and get control signal
                 vx,vy,vz,p,q,r,control_input= run_solver(N=N,model=None,

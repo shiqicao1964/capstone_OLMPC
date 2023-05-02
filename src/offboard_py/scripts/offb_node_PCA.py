@@ -15,6 +15,8 @@ from MPC_PCA import acados_settinngs, linear_quad_model, run_solver,DT_gp_model,
 from scipy.spatial import distance
 import threading
 import os
+import random
+
 source_dir = os.getcwd()
 print('source_dir',source_dir)
 os.chdir(source_dir +'/data')
@@ -101,10 +103,10 @@ rate = rospy.Rate(Hz)
 model_Hz = 1/20
 rate_model = rospy.Rate(model_Hz)
 discretization_dt = 0.05
-v_average = 2 # 1.5 / 2 / 2.5 / 3
-radius = 8
+v_average = 5 # 1.5 / 2 / 2.5 / 3
+
 # set traj =================================================================================================================================
-x_ref,y_ref,z_ref,t_ref,vx_ref,vy_ref,vz_ref,T_onecircle = ellipse_trag(speed = v_average,x_w = 4,y_w = 4,z_w = 0,H = 5,dT = discretization_dt ,sim_t = 270)
+x_ref,y_ref,z_ref,t_ref,vx_ref,vy_ref,vz_ref,T_onecircle = ellipse_trag(speed = v_average,x_w = 8,y_w = 8,z_w = 0,H = 5,dT = discretization_dt ,sim_t = 200)
 ref = np.zeros((x_ref.shape[0],12))
 ref[::,0] = x_ref
 ref[::,1] = y_ref
@@ -164,7 +166,7 @@ def build_new_model():
         if len(GP_buff_predict) < buff_Length :
             time.sleep(0.05)
             acados_solver = acados_settinngs(model_save[0],t_horizon = t_horizon,N=N)
-        elif (time.time() - t_comp_start < 100):
+        elif (time.time() - t_comp_start < 10):
             acados_solver = acados_settinngs(model_save[0],t_horizon = t_horizon,N=N)
 
         else:
@@ -207,23 +209,6 @@ def build_new_model():
             solver_save.popleft()
 
             print('=======================================================================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============       ====               ====          ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============       ==                     ==        ================')
-            print('===============         ==                 ==          ================')
-            print('===============           == == == == == ==            ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
-            print('===============                                        ================')
             print('=======================================================================', time.time() - time_new_solver)
 
             np.savetxt(f'/home/shiqi/.ros/data/posrecord_{model_iter}.out',np.array(pos_record).T,delimiter=',')
@@ -314,8 +299,8 @@ def main_control():
         # measure states
         roll,pitch,yaw = euler_from_quaternion(pos_1.pose.orientation.x,
             pos_1.pose.orientation.y,pos_1.pose.orientation.z,pos_1.pose.orientation.w)
-        import random
-        Xc = pos_1.pose.position.x #+ random.randint(0,9) /100
+        
+        Xc = pos_1.pose.position.x 
         Yc = pos_1.pose.position.y
         Zc = pos_1.pose.position.z
         Vxc = (Xc - X_last)*Hz
@@ -358,10 +343,14 @@ def main_control():
                 acados_solver = solver_save[0]
                 model = model_save[0]
                 GP_result = solve_DT_nextState(model,control_input ,current_states)
+
                 # get measurement as current states 
                 current_states = np.array(
                 [Xc, Yc, Zc] + [roll, pitch, yaw] + [Vx_mean, Vy_mean, Vz_mean] + [Wxc, Wyc, Wzc]
                 )
+                # add noise 
+                noise = np.random.normal(0, 0.01, current_states.shape)
+                #current_states = current_states + noise
 
                 # solve MPC and get control signal
                 vx,vy,vz,p,q,r,control_input= run_solver(N=N,model=None,

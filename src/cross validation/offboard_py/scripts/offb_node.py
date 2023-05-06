@@ -104,7 +104,8 @@ discretization_dt = 0.05
 v_average = 2 # 1.5 / 2 / 2.5 / 3
 radius = 8
 # set traj =================================================================================================================================
-x_ref,y_ref,z_ref,t_ref,vx_ref,vy_ref,vz_ref,T_onecircle = ellipse_trag(speed = v_average,x_w = 4,y_w = 4,z_w = 0,H = 5,dT = discretization_dt ,sim_t = 150)
+x_ref,y_ref,z_ref,t_ref,vx_ref,vy_ref,vz_ref,T_onecircle = ellipse_trag(
+    speed = v_average,x_w = 4,y_w = 4,z_w = 0,H = 5,dT = discretization_dt ,sim_t = 160)
 ref = np.zeros((x_ref.shape[0],12))
 ref[::,0] = x_ref
 ref[::,1] = y_ref

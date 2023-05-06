@@ -352,18 +352,18 @@ def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
 
     # find optimal reguarlization\
     optimal_alpha_1 = find_optimal_alpha(input_state_R.T,error_y_R[[2,6,7,8],:].T)
-    optimal_alpha_1 = 0.001
+    
     # find optimal L 
     gpr1 = GPR()
-    gpr1.fit(input_state.T,error_y[[6],:].T , [(0.1, 10)] ,optimal_alpha_1)
+    gpr1.fit(input_state.T,error_y[[6],:].T , [(0.1, 15)] ,optimal_alpha_1)
 
 
     gpr2 = GPR()
-    gpr2.fit(input_state.T,error_y[[7],:].T , [(0.1, 10)] ,optimal_alpha_1)
+    gpr2.fit(input_state.T,error_y[[7],:].T , [(0.1, 15)] ,optimal_alpha_1)
 
 
     gpr3 = GPR()
-    gpr3.fit(input_state.T,error_y[[2,8],:].T ,[(0.1, 10)] ,optimal_alpha_1)
+    gpr3.fit(input_state.T,error_y[[2,8],:].T ,[(0.1, 15)] ,optimal_alpha_1)
 
 
 
@@ -419,7 +419,7 @@ def DT_gp_model(dT,name,predict,measurement,control,total_buff_size):
 
 
 def find_optimal_alpha(X,y):
-    search_list_alpha = np.array([1,5e-1,2e-1,8e-2,4e-2,1e-2,5e-3,1e-3,5e-4,1e-4,5e-5,1e-5,5e-6,1e-6])
+    search_list_alpha = np.array([1e-3,5e-4,1e-4,5e-5,1e-5,5e-6,1e-6])
     recode_score=np.array([])
     alpha_lst = np.array([])
     t0 = time.time()

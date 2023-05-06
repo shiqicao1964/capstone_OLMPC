@@ -316,7 +316,7 @@ class GPR:
         if self.optimize:
             res = minimize(negative_log_likelihood_loss, [self.params["l"]],
                    bounds=bounds_,
-                   method='L-BFGS-B')
+                   method='L-BFGS-B',options={'maxls':1200})
             self.params["l"] = res.x[0]
         self.is_fit = True
 

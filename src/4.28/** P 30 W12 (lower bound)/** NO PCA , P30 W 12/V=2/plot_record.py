@@ -144,30 +144,22 @@ if __name__ == "__main__":
     x_w = 4
     H = 5
 
-    fig = plt.figure(figsize = (18,6))
+    fig = plt.figure(figsize = (5,5))
     fig.subplots_adjust(wspace=0.1, hspace=0.1)
-    ax1 = fig.add_subplot(1, 3, 1, projection='3d')
-    ax2 = fig.add_subplot(1, 3, 2, projection='3d')
-    ax3 = fig.add_subplot(1, 3, 3, projection='3d')
 
-    ax1.plot(ref_mes[3],ref_mes[4],ref_mes[5],color='orange')
-    ax1.plot(ref_mes[0],ref_mes[1],ref_mes[2],color='red')
-    ax1.set_ylim(-x_w,x_w)
-    ax1.set_zlim(H-1,H+1)
+    ax3 = fig.add_subplot(1, 1, 1, projection='3d')
 
-    ax2.plot(ref_mes_dyn[3],ref_mes_dyn[4],ref_mes_dyn[5],color='blue')
-    ax2.plot(ref_mes_dyn[0],ref_mes_dyn[1],ref_mes_dyn[2],color='red')
-    ax2.set_xlim(-x_w,x_w)
-    ax2.set_ylim(-x_w,x_w)
-    ax2.set_zlim(H-1,H+1)
-
-    ax3.plot(ref_mes_dyn[3],ref_mes_dyn[4],ref_mes_dyn[5],color='blue')
-    ax3.plot(ref_mes[3],ref_mes[4],ref_mes[5],color='orange')
-    ax3.plot(ref_mes_dyn[0],ref_mes_dyn[1],ref_mes_dyn[2],color='red')
+    ax3.plot(ref_mes_dyn[3],ref_mes_dyn[4],ref_mes_dyn[5],color='blue',label='Offline GP')
+    ax3.plot(ref_mes[3],ref_mes[4],ref_mes[5],color='orange',label='Online GP')
+    ax3.plot(ref_mes_dyn[0],ref_mes_dyn[1],ref_mes_dyn[2],color='red',label='Reference')
     ax3.set_xlim(-x_w,x_w)
     ax3.set_ylim(-x_w,x_w)
     ax3.set_zlim(H-1,H+1)
+    ax3.set_xlabel('X [m]')
+    ax3.set_ylabel('Y [m]')
+    ax3.set_zlabel('Z [m]')
 
+    ax3.legend()
     plt.show()
     time.sleep(1)
 

@@ -82,95 +82,51 @@ if __name__ == "__main__":
     #ref[::,7] = vel_traj_y
     #ref[::,8] = vel_traj_z
 
-    start_point = 300
+    start_point = 100
     stop_point = 4000
     number_files = 6
 
-    # load pos_error_record_ s
-    error_record = np.genfromtxt(f'pos_error_record_{3}.out',delimiter=',')[:,:]
-    for i in range(number_files-4):
-        #print(i+5)
-        error_record_i = np.genfromtxt(f'pos_error_record_{i+4}.out',delimiter=',')[:,:]
-        error_record = np.concatenate((error_record,error_record_i), axis = 1)
 
-
-    # load pos_error_record_dyn for offline GP
-    error_record_dyn = np.genfromtxt('pos_error_record_dyn.out',delimiter=',')[:,start_point:]
-    #error_record_dyn = np.concatenate((error_record_dyn,  np.genfromtxt('pos_error_record_1.out',delimiter=',') ), axis = 1)
-
-    print(error_record.shape)
-    print(error_record_dyn.shape)
-
-    print('mean square error of offline GP : (x , y , z)', np.mean(error_record_dyn,1))
-    print('average distance error of offline GP :', np.mean(np.sqrt(np.sum(error_record_dyn,0))))
-    print('max error offline GP :', np.max(np.sqrt(np.sum(error_record_dyn,0))))
-
-    print('mean square error of online GP : (x , y , z)', np.mean(error_record,1))
-    print('average distance error of GP + DYN model :', np.mean(np.sqrt(np.sum(error_record,0))))
-    print('max error online GP :', np.max(np.sqrt(np.sum(error_record,0))))
-
-    distance_error = np.sqrt(np.sum(error_record,0))
-    number_L_025 = np.count_nonzero(distance_error > 0.25)
-    print('radio of >0.25 :', number_L_025/len(distance_error))
-
-    fig2D = plt.figure(figsize = (12,6))
-    ax5 = fig2D.add_subplot(2,1,1)
-    t = np.linspace(0, len(distance_error)-1, num=len(distance_error))
-    ax5.plot(t,(distance_error),color='green')
-    ax5.set_xlim(0,len(distance_error))
-    ax5.set_ylim(0,1)
-    distance_error_dyn = np.sqrt(np.sum(error_record_dyn,0))
-
-    ax6 = fig2D.add_subplot(2,1,2)
-    t = np.linspace(0, len(distance_error_dyn)-1, num=len(distance_error_dyn))
-    ax6.plot(t,(distance_error_dyn),color='blue')
-    ax6.set_ylim(0,1)
-    ax6.set_xlim(0,len(distance_error))
 
 
     # load ref_mes s
-    ref_mes = np.genfromtxt(f'ref_mes_{3}.out',delimiter=',')[:,:]
+    ref_mes_R = np.genfromtxt(f'R/ref_mes_{4}.out',delimiter=',')[:,:]
     for i in range(number_files-4):
         #print(i+5)
-        ref_mes_i = np.genfromtxt(f'ref_mes_{i+4}.out',delimiter=',')[:,:]
-        ref_mes = np.concatenate((ref_mes,ref_mes_i), axis = 1)
+        ref_mes_R_i = np.genfromtxt(f'R/ref_mes_{i+5}.out',delimiter=',')[:,:]
+        ref_mes_R = np.concatenate((ref_mes_R,ref_mes_R_i), axis = 1)
     # load ref_mes_dyn for offline GP
-    ref_mes_dyn = np.genfromtxt('ref_mes_dyn.out',delimiter=',')[:,start_point:]
+    number_files = 12
+    #ref_mes_dyn = np.genfromtxt('ref_mes_dyn.out',delimiter=',')[:,start_point:]
+    ref_mes_dyn = np.genfromtxt(f'NO_R2/ref_mes_{4}.out',delimiter=',')[:,:]
+    for i in range(number_files-4):
+        #print(i+5)
+        ref_mes_R_i = np.genfromtxt(f'NO_R2/ref_mes_{i+5}.out',delimiter=',')[:,:]
+        ref_mes_dyn = np.concatenate((ref_mes_dyn,ref_mes_R_i), axis = 1)
     #ref_mes_dyn = np.concatenate((ref_mes_dyn, np.genfromtxt('ref_mes_1.out',delimiter=',') ), axis = 1)
 
     iindex = -1
-    print('pos_record dyn',ref_mes_dyn.shape)
-    print('pos_record GP + dyn',ref_mes.shape)
-    print('error_record_dyn dyn',error_record_dyn.shape)
-    print('error_record GP + dyn',error_record.shape)
+
 
     x_w = 4
     H = 5
 
-    fig = plt.figure(figsize = (18,6))
+    fig = plt.figure(figsize = (5,5))
     fig.subplots_adjust(wspace=0.1, hspace=0.1)
-    ax1 = fig.add_subplot(1, 3, 1, projection='3d')
-    ax2 = fig.add_subplot(1, 3, 2, projection='3d')
-    ax3 = fig.add_subplot(1, 3, 3, projection='3d')
 
-    ax1.plot(ref_mes[3],ref_mes[4],ref_mes[5],color='orange')
-    ax1.plot(ref_mes[0],ref_mes[1],ref_mes[2],color='red')
-    ax1.set_ylim(-x_w,x_w)
-    ax1.set_zlim(H-1,H+1)
+    ax3 = fig.add_subplot(1, 1, 1, projection='3d')
 
-    ax2.plot(ref_mes_dyn[3],ref_mes_dyn[4],ref_mes_dyn[5],color='blue')
-    ax2.plot(ref_mes_dyn[0],ref_mes_dyn[1],ref_mes_dyn[2],color='red')
-    ax2.set_xlim(-x_w,x_w)
-    ax2.set_ylim(-x_w,x_w)
-    ax2.set_zlim(H-1,H+1)
-
-    ax3.plot(ref_mes_dyn[3],ref_mes_dyn[4],ref_mes_dyn[5],color='blue')
-    ax3.plot(ref_mes[3],ref_mes[4],ref_mes[5],color='orange')
-    ax3.plot(ref_mes_dyn[0],ref_mes_dyn[1],ref_mes_dyn[2],color='red')
+    ax3.plot(ref_mes_dyn[3],ref_mes_dyn[4],ref_mes_dyn[5],color='blue',label='Online GP')
+    ax3.plot(ref_mes_R[3],ref_mes_R[4],ref_mes_R[5],color='orange',label='with regularization(Bayesian)')
+    ax3.plot(ref_mes_dyn[0],ref_mes_dyn[1],ref_mes_dyn[2],color='red',label='Reference')
     ax3.set_xlim(-x_w,x_w)
     ax3.set_ylim(-x_w,x_w)
     ax3.set_zlim(H-1,H+1)
+    ax3.set_xlabel('X [m]')
+    ax3.set_ylabel('Y [m]')
+    ax3.set_zlabel('Z [m]')
 
+    ax3.legend()
     plt.show()
     time.sleep(1)
 

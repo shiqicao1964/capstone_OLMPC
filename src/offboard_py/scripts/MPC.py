@@ -163,6 +163,75 @@ def ellipse_trag(speed = 3,x_w = 3,y_w = 4,z_w = 0,H = 5,dT = 0.05,sim_t = 100):
     vz = np.array(vz)
     return x[:-1], y[:-1], z[:-1],t_new,vx,vy,vz,T_onecircle
 
+def A_function(x_w,y_w,H,t):
+
+    z = H + 0 *t
+    x = 3 * np.cos(t/2) + 2 * np.sin(t/1)  + 10
+    y = 2*t + 10
+
+    return x,y,z
+
+def race_traj(speed = 3,x_w = 3,y_w = 4,z_w = 0,H = 5,dT = 0.05,sim_t = 100):
+    t_abl = [0]
+    t = np.linspace(0, 2*np.pi, num=10000)
+    ###################################
+    x,y,z = A_function(x_w,y_w,H,t)
+    x0,y0,z0 = A_function(x_w,y_w,H,0)
+
+    for n in range(len(t)):
+        # calculate if dist == dT * speed
+        dist = math.sqrt((x[n]-x0)**2 + (y[n]-y0)**2 + (z[n]-z0)**2)
+        if dist > dT * speed:
+            t_abl.append(t[n])
+            x0 = x[n]
+            y0 = y[n]
+            z0 = z[n]
+    t_new = np.array(t_abl)
+    T_onecircle = len(t_new)*dT
+    real_part = sim_t/T_onecircle
+    circles = int(np.ceil(sim_t/T_onecircle))
+  
+    t_abl = [0]
+    vx = []
+    vy = []
+    vz = []
+    t = np.linspace(0, circles*2*np.pi, num=10000*circles)
+    ######################################################
+    x,y,z = A_function(x_w,y_w,H,t)
+    x0,y0,z0 = A_function(x_w,y_w,H,0)
+    for n in range(len(t)):
+        # calculate if dist == dT * speed
+        dx = x[n]-x0
+        dy = y[n]-y0
+        dz = z[n]-z0
+        dist = math.sqrt((dx)**2 + (dy)**2 + (dz)**2)
+        if dist > dT * speed:
+            t_abl.append(t[n])
+            vx.append( dx * speed / dist )
+            vy.append( dy * speed / dist )
+            vz.append( dz * speed / dist )
+            x0 = x[n]
+            y0 = y[n]
+            z0 = z[n]
+    t_new = np.array(t_abl)
+    #########################################
+    x,y,z = A_function(x_w,y_w,H,t_new)
+    vx = np.array(vx)
+    vy = np.array(vy)
+    vz = np.array(vz)
+
+    if real_part < 1:
+        last_sample = int(len(x)*real_part)
+        x = x[:last_sample]
+        y = y[:last_sample]
+        z = z[:last_sample]
+        vx = vx[:last_sample-1]
+        vy = vy[:last_sample-1]
+        vz = vz[:last_sample-1]
+
+
+    return x[:-1], y[:-1], z[:-1],t_new,vx,vy,vz
+
 
 def linear_quad_model():
 
